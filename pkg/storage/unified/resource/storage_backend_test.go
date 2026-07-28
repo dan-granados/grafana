@@ -3829,3 +3829,167 @@ func collectHistory(t *testing.T, backend *kvStorageBackend, ctx context.Context
 	require.NoError(t, err)
 	return items
 }
+
+func TestKvStorageBackend_ListEventsSince(t *testing.T) {
+	backend := setupTestStorageBackend(t)
+	ctx := context.Background()
+
+	testObj, err := createTestObject()
+	require.NoError(t, err)
+	metaAccessor, err := utils.MetaAccessor(testObj)
+	require.NoError(t, err)
+
+	writeEvent := func(name string) int64 {
+		rv, err := backend.WriteEvent(ctx, WriteEvent{
+			Type: resourcepb.WatchEvent_ADDED,
+			Key: &resourcepb.ResourceKey{
+				Namespace: "default",
+				Group:     "apps",
+				Resource:  "resources",
+				Name:      name,
+			},
+			Value:     objectToJSONBytes(t, testObj),
+			Object:    metaAccessor,
+			ObjectOld: metaAccessor,
+		})
+		require.NoError(t, err)
+		return rv
+	}
+
+	rv1 := writeEvent("resource-1")
+	rv2 := writeEvent("resource-2")
+	rv3 := writeEvent("resource-3")
+
+	collect := func(sinceRV int64) []int64 {
+		var rvs []int64
+		for event, err := range backend.ListEventsSince(ctx, sinceRV) {
+			require.NoError(t, err)
+			require.NotEmpty(t, event.Value)
+			rvs = append(rvs, event.ResourceVersion)
+		}
+		return rvs
+	}
+
+	// Events are returned in ascending order, and sinceRV is exclusive.
+	assert.Equal(t, []int64{rv1, rv2, rv3}, collect(0))
+	assert.Equal(t, []int64{rv2, rv3}, collect(rv1))
+	assert.Empty(t, collect(rv3))
+}
+
+func TestKvStorageBackend_CanReplayFrom(t *testing.T) {
+	backend := setupTestStorageBackend(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	saveEvent := func(name string, rv int64) {
+		require.NoError(t, backend.eventStore.Save(ctx, Event{
+			Namespace:       "default",
+			Group:           "apps",
+			Resource:        "resources",
+			Name:            name,
+			ResourceVersion: rv,
+			Action:          DataActionCreated,
+		}))
+	}
+
+	// An empty store has nothing to replay.
+	require.NoError(t, backend.CanReplayFrom(ctx, snowflakeFromTime(now.Add(-2*time.Hour))))
+
+	recentRV := snowflakeFromTime(now.Add(-time.Minute))
+	saveEvent("recent-resource", recentRV)
+
+	// Inside the replay window, a resume is allowed.
+	require.NoError(t, backend.CanReplayFrom(ctx, recentRV))
+
+	// Older than the replay window, so the resume is refused and the client has
+	// to list again from scratch.
+	oldRV := snowflakeFromTime(now.Add(-2 * time.Hour))
+	err := backend.CanReplayFrom(ctx, oldRV)
+	require.Error(t, err)
+	require.True(t, IsResourceVersionExpired(err), "expected an expired resource version error, got %v", err)
+
+	// A caller that is already up to date is never refused, even when its
+	// resource version is older than the replay window. Otherwise a client
+	// resuming from a fresh list of a store that has been idle for longer than
+	// the window would relist forever.
+	require.NoError(t, backend.CanReplayFrom(ctx, recentRV+1))
+
+	idle := setupTestStorageBackend(t)
+	idleRV := snowflakeFromTime(now.Add(-45 * time.Minute))
+	require.NoError(t, idle.eventStore.Save(ctx, Event{
+		Namespace:       "default",
+		Group:           "apps",
+		Resource:        "resources",
+		Name:            "last-write",
+		ResourceVersion: idleRV,
+		Action:          DataActionCreated,
+	}))
+	require.NoError(t, idle.CanReplayFrom(ctx, idleRV))
+}
+
+func TestKvStorageBackend_MaxEventReplayAge(t *testing.T) {
+	backend := setupTestStorageBackend(t)
+
+	// Half the retention period, capped at maxEventReplayAge (5m).
+	assert.Equal(t, 5*time.Minute, backend.maxEventReplayAge())
+
+	backend.eventRetentionPeriod = 8 * time.Minute
+	assert.Equal(t, 4*time.Minute, backend.maxEventReplayAge())
+}
+
+func TestKvStorageBackend_EventRetentionPeriodMinimum(t *testing.T) {
+	// A retention below the minimum is ignored in favour of the default, so the
+	// replay window keeps a safe margin below the pruner cutoff.
+	belowMin := setupTestStorageBackend(t, func(o *KVBackendOptions) {
+		o.EventRetentionPeriod = time.Minute
+	})
+	assert.Equal(t, defaultEventRetentionPeriod, belowMin.eventRetentionPeriod)
+
+	// A retention at or above the minimum is honoured as configured.
+	honoured := setupTestStorageBackend(t, func(o *KVBackendOptions) {
+		o.EventRetentionPeriod = 20 * time.Minute
+	})
+	assert.Equal(t, 20*time.Minute, honoured.eventRetentionPeriod)
+}
+
+func TestKvStorageBackend_ListEventsSince_SkipsPrunedData(t *testing.T) {
+	backend := setupTestStorageBackend(t)
+	ctx := context.Background()
+
+	testObj, err := createTestObject()
+	require.NoError(t, err)
+	metaAccessor, err := utils.MetaAccessor(testObj)
+	require.NoError(t, err)
+
+	rv, err := backend.WriteEvent(ctx, WriteEvent{
+		Type: resourcepb.WatchEvent_ADDED,
+		Key: &resourcepb.ResourceKey{
+			Namespace: "default",
+			Group:     "apps",
+			Resource:  "resources",
+			Name:      "test-resource",
+		},
+		Value:     objectToJSONBytes(t, testObj),
+		Object:    metaAccessor,
+		ObjectOld: metaAccessor,
+	})
+	require.NoError(t, err)
+
+	// An event whose data version has been pruned is skipped instead of failing
+	// the whole replay.
+	require.NoError(t, backend.eventStore.Save(ctx, Event{
+		Namespace:       "default",
+		Group:           "apps",
+		Resource:        "resources",
+		Name:            "pruned-resource",
+		ResourceVersion: rv + 1,
+		Action:          DataActionCreated,
+	}))
+
+	var rvs []int64
+	for event, err := range backend.ListEventsSince(ctx, 0) {
+		require.NoError(t, err)
+		rvs = append(rvs, event.ResourceVersion)
+	}
+	assert.Equal(t, []int64{rv}, rvs)
+}

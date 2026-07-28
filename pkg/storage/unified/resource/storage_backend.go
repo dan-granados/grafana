@@ -40,8 +40,14 @@ import (
 )
 
 const (
-	defaultListBufferSize             = 100
-	defaultEventRetentionPeriod       = 1 * time.Hour
+	defaultListBufferSize       = 100
+	defaultEventRetentionPeriod = 1 * time.Hour
+	minEventRetentionPeriod     = 10 * time.Minute
+	// maxEventReplayAge caps how far back a watch may be resumed from. Events are
+	// pruned once they fall outside the retention period, by any instance in the
+	// deployment, so we cap the resume window well inside that period instead of
+	// trying to track what other instances have already deleted.
+	maxEventReplayAge                 = 5 * time.Minute
 	defaultEventPruningInterval       = 5 * time.Minute
 	defaultSearchLookback             = 1 * time.Second
 	defaultGarbageCollectionBatchWait = 1 * time.Second
@@ -328,7 +334,11 @@ func NewKVStorageBackend(opts KVBackendOptions) (KVBackend, error) {
 	eventStore := newEventStore(kv)
 
 	eventRetentionPeriod := opts.EventRetentionPeriod
-	if eventRetentionPeriod <= 0 {
+	if eventRetentionPeriod < minEventRetentionPeriod {
+		if eventRetentionPeriod > 0 {
+			logger.Warn("configured event_retention_period is below the minimum; falling back to the default",
+				"configured", eventRetentionPeriod, "minimum", minEventRetentionPeriod, "default", defaultEventRetentionPeriod)
+		}
 		eventRetentionPeriod = defaultEventRetentionPeriod
 	}
 
@@ -2409,6 +2419,129 @@ func (k *kvStorageBackend) emitWriteEvents(ctx context.Context, batch []Event, o
 		}
 	}
 	return true
+}
+
+// toWrittenEvent loads the value stored for an event and turns it into a WrittenEvent.
+func (k *kvStorageBackend) toWrittenEvent(ctx context.Context, event Event) (*WrittenEvent, error) {
+	dataReader, err := k.dataStore.Get(ctx, DataKey{
+		Group:           event.Group,
+		Resource:        event.Resource,
+		Namespace:       event.Namespace,
+		Name:            event.Name,
+		ResourceVersion: event.ResourceVersion,
+		Action:          event.Action,
+		Folder:          event.Folder,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get data for event: %w", err)
+	}
+	if dataReader == nil {
+		return nil, fmt.Errorf("no data for event with resource version %d: %w", event.ResourceVersion, ErrNotFound)
+	}
+	data, err := readAndClose(dataReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read data for event: %w", err)
+	}
+
+	var t resourcepb.WatchEvent_Type
+	switch event.Action {
+	case DataActionCreated:
+		t = resourcepb.WatchEvent_ADDED
+	case DataActionUpdated:
+		t = resourcepb.WatchEvent_MODIFIED
+	case DataActionDeleted:
+		t = resourcepb.WatchEvent_DELETED
+	}
+
+	return &WrittenEvent{
+		Key: &resourcepb.ResourceKey{
+			Namespace: event.Namespace,
+			Group:     event.Group,
+			Resource:  event.Resource,
+			Name:      event.Name,
+		},
+		Type:            t,
+		Folder:          event.Folder,
+		Value:           data,
+		ResourceVersion: event.ResourceVersion,
+		PreviousRV:      event.PreviousRV,
+		Timestamp:       ResourceVersionTime(event.ResourceVersion).Unix(),
+	}, nil
+}
+
+// maxEventReplayAge is how far back a watch may be resumed from: half the event
+// retention period, capped at maxEventReplayAge. Staying strictly below the
+// retention period leaves a margin so the pruner cannot delete events in the
+// range we are about to replay (which would silently drop them).
+func (k *kvStorageBackend) maxEventReplayAge() time.Duration {
+	if half := k.eventRetentionPeriod / 2; half < maxEventReplayAge {
+		return half
+	}
+	return maxEventReplayAge
+}
+
+// CanReplayFrom reports whether a watch may be resumed from sinceRV. A resume is
+// refused once sinceRV is older than the replay window (see maxEventReplayAge),
+// because the events needed to catch up may already have been pruned - so the
+// client has to list again from scratch.
+func (k *kvStorageBackend) CanReplayFrom(ctx context.Context, sinceRV int64) error {
+	latest, err := k.eventStore.LastEventKey(ctx)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return nil // no events at all
+	case err != nil:
+		return err
+	case sinceRV >= latest.ResourceVersion:
+		// Nothing was written after sinceRV, so there is nothing to replay
+		return nil
+	}
+
+	if ResourceVersionTime(sinceRV).Before(time.Now().Add(-k.maxEventReplayAge())) {
+		return NewResourceVersionExpiredError(sinceRV)
+	}
+	return nil
+}
+
+// ListEventsSince returns all write events with a resource version greater than
+// sinceRV, in ascending resource version order. It reads straight from the
+// event store, so it is only complete for resource versions that are still
+// within the event retention period (see EventRetentionPeriod).
+func (k *kvStorageBackend) ListEventsSince(ctx context.Context, sinceRV int64) iter.Seq2[*WrittenEvent, error] {
+	return func(yield func(*WrittenEvent, error) bool) {
+		ctx, span := tracer.Start(ctx, "resource.kvStorageBackend.ListEventsSince", trace.WithAttributes(
+			attribute.Int64("sinceRV", sinceRV),
+		))
+		defer span.End()
+
+		for event, err := range k.eventStore.ListSince(ctx, sinceRV, SortOrderAsc) {
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			if event.ResourceVersion <= sinceRV {
+				continue
+			}
+			// Events written as part of a bulk update are not streamed to watchers.
+			if event.PreviousRV < 0 {
+				continue
+			}
+			written, err := k.toWrittenEvent(ctx, event)
+			switch {
+			case errors.Is(err, ErrNotFound):
+				// The version this event refers to was pruned from the data
+				// store. A newer version exists and its own event follows, so
+				// the watcher still converges.
+				k.log.Debug("skipping event with pruned data", "resource_version", event.ResourceVersion)
+				continue
+			case err != nil:
+				yield(nil, err)
+				return
+			}
+			if !yield(written, nil) {
+				return
+			}
+		}
+	}
 }
 
 // GetResourceStats returns resource stats within the storage backend.
