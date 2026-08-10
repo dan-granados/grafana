@@ -102,11 +102,12 @@ type BulkIndexRequest struct {
 }
 
 type IndexBuildInfo struct {
-	BuildTime        time.Time       // Timestamp when the index was built. This value doesn't change on subsequent index updates.
-	BuildVersion     *semver.Version // Grafana version used when originally building the index. This value doesn't change on subsequent index updates.
-	SelectableFields []string        // List of selectable fields used when index was built.
-	SearchFieldsHash string          // Hash captured at build time over the SearchFieldDefinition slices registered for (group, resource), across all versions. Empty when no SearchFieldsProvider was in use.
-	Features         []IndexFeature  // Index features the index was built with. Empty on indexes built before index features existed.
+	BuildTime          time.Time       // Timestamp when the index was built. This value doesn't change on subsequent index updates.
+	BuildVersion       *semver.Version // Grafana version used when originally building the index. This value doesn't change on subsequent index updates.
+	SelectableFields   []string        // List of selectable fields used when index was built.
+	SearchFieldsHash   string          // Hash captured at build time over the SearchFieldDefinition slices registered for (group, resource), across all versions. Empty when no SearchFieldsProvider was in use.
+	Features           []IndexFeature  // Index features the index was built with. Empty on indexes built before index features existed.
+	ReaderRequirements []IndexFeature  // Features a reader must understand before using this index. Empty on indexes built before requirements were recorded.
 }
 
 // IndexFeature names a mapping change an older index cannot satisfy. Only for
@@ -145,10 +146,32 @@ func TrashIndexFeatures() []IndexFeature {
 }
 
 // currentIndexFeatures is recorded in every index this binary builds.
+//
+// A feature that changes which documents the index holds, not just how they are
+// mapped, belongs in readerRequiredFeatures too, and must not be enabled here
+// until that check has shipped for longer than the compatibility window —
+// instances without the check ignore the requirement and read the index anyway.
 var currentIndexFeatures = []IndexFeature{
 	IndexFeatureDeletedMarker,
 	IndexFeatureStoredFacets,
 	IndexFeatureTrashFields,
+}
+
+// knownIndexFeatures is every feature this binary can read. A feature belongs here
+// from the release that implements its reading side, even if nothing builds indexes
+// with it yet. Only ever grows.
+var knownIndexFeatures = []IndexFeature{
+	IndexFeatureDeletedMarker,
+	IndexFeatureStoredFacets,
+	IndexFeatureTrashFields,
+}
+
+// readerRequiredFeatures name features a reader must understand before using an
+// index built with them: such an index keeps deleted documents, which a reader
+// without the feature returns as live. Features that only make results incomplete
+// do not belong here — serving those is safe.
+var readerRequiredFeatures = []IndexFeature{
+	IndexFeatureDeletedMarker,
 }
 
 // requiredIndexFeatures is the subset an index must already have to be used. An
@@ -189,6 +212,32 @@ func MissingIndexFeatures(buildInfo IndexBuildInfo, requiredFeatures []IndexFeat
 		}
 	}
 	return missing
+}
+
+// IndexReaderRequirements returns the requirements an index built by this binary
+// declares. Limited to features the index actually has, so it describes the index.
+func IndexReaderRequirements() []IndexFeature {
+	var required []IndexFeature
+	for _, feature := range currentIndexFeatures {
+		if slices.Contains(readerRequiredFeatures, feature) {
+			required = append(required, feature)
+		}
+	}
+	return slices.Sorted(slices.Values(required))
+}
+
+// UnknownIndexRequirements returns declared requirements this binary does not
+// recognise; a non-empty result means the index must not be used. Matching on known
+// names rather than required ones is what lets an instance refuse a feature added
+// after it shipped.
+func UnknownIndexRequirements(requirements []IndexFeature) []IndexFeature {
+	var unknown []IndexFeature
+	for _, feature := range requirements {
+		if !slices.Contains(knownIndexFeatures, feature) {
+			unknown = append(unknown, feature)
+		}
+	}
+	return unknown
 }
 
 type ResourceIndex interface {
