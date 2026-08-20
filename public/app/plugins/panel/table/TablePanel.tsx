@@ -31,7 +31,7 @@ export function TablePanel(props: Props) {
     replaceVariables,
     transparent,
     initialRowIndex,
-    sortByBehavior = 'initial',
+    sortByBehavior = 'managed',
   } = props;
 
   useCacheFieldDisplayNames(data.series);
