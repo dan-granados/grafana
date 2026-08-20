@@ -62,12 +62,21 @@ function getLogsTableTransformations(
   return transformations;
 }
 
+function getTargetsFromExploreQueries(queries: DataQuery[], datasource?: DataSourceRef): DataQuery[] {
+  return queries.map((query) => ({
+    ...query,
+    datasource: query.datasource ?? datasource,
+  }));
+}
+
 export function buildDashboardPanelFromExploreState(options: ExploreToDashboardPanelOptions): Panel {
   const panelType = getPanelType(options.queries, options.queryResponse, options?.panelState);
+  const ranQueries = options.queryResponse.request?.targets;
+  const queries = ranQueries?.length ? ranQueries : options.queries;
+  const targets = getTargetsFromExploreQueries(queries, options.datasource);
 
   return {
-    //@ts-ignore
-    targets: options.queries,
+    targets: targets as Panel['targets'],
     type: panelType,
     title: t('explore.build-dashboard-panel-from-explore-state.title.new-panel', 'New Panel'),
     gridPos: { x: 0, y: 0, w: 12, h: 8 },
