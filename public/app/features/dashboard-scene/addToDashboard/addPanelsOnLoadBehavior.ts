@@ -43,11 +43,18 @@ export function addPanelsOnLoadBehavior(scene: DashboardScene) {
     return;
   }
 
+  // Explore → Add to dashboard must apply immediately. dashboardEditActions only
+  // performs mutations while the sidebar is active, so activate it if needed.
+  if (!scene.state.sidebar.isActive) {
+    scene.activateSidebar();
+  }
+
   if (scene.state.sidebar.isActive) {
     addPanels();
-  } else {
-    scene.state.sidebar.addActivationHandler(() => {
-      addPanels();
-    });
+    return;
   }
+
+  scene.state.sidebar.addActivationHandler(() => {
+    addPanels();
+  });
 }
