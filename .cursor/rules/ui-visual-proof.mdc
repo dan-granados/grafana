@@ -1,0 +1,27 @@
+---
+description: Require video or screenshot proof for UI-facing bug fixes and feature changes
+alwaysApply: true
+---
+
+# UI visual proof
+
+When a bug fix or feature change touches UI (React components, panels, drawers, pages, CSS, empty states, or interactive controls), do not treat the work as done until there is visual proof of the running UI.
+
+## Required
+
+1. Start Grafana (`make run` + `yarn start`) and wait until the UI is actually serving.
+2. Drive the changed flow in the browser. Login is `admin` / `admin`; skip the password-change prompt.
+3. Capture **video** for any interaction (click, sort, save, empty-state CTA, navigation). Use **screenshot** only for a static visual change with no user action.
+4. Keep recordings short: the success path only. Discard long setup/debug sessions and recapture a clean take.
+5. Embed the artifact in the reply (`<video src="...">` or an image). Do not commit media into the Grafana repo.
+
+## Examples
+
+```text
+✅ Table header sort: 15s video of click → rows reorder → reverse click
+✅ Explore empty state: screenshot of hint + Try up, plus a short clip of the click
+❌ “Tests passed” with no running UI capture
+❌ 20-minute recording of plugin install failures
+```
+
+Unit and e2e tests are still required. Visual proof is extra, not a substitute.
