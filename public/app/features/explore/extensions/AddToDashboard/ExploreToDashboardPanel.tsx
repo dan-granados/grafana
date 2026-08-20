@@ -1,6 +1,7 @@
 import { type ReactElement } from 'react';
 
 import { AddToDashboardForm } from 'app/features/dashboard-scene/addToDashboard/AddToDashboardForm';
+import { getState } from 'app/store/store';
 import { useSelector } from 'app/types/store';
 
 import { getExploreItemSelector } from '../../state/selectors';
@@ -17,11 +18,12 @@ export function ExploreToDashboardPanel(props: Props): ReactElement {
   const exploreItem = useSelector(getExploreItemSelector(exploreId))!;
 
   const buildPanel = () => {
+    const current = getExploreItemSelector(exploreId)(getState()) ?? exploreItem;
     return buildDashboardPanelFromExploreState({
-      datasource: exploreItem.datasourceInstance?.getRef(),
-      queries: exploreItem.queries,
-      queryResponse: exploreItem.queryResponse,
-      panelState: exploreItem?.panelsState,
+      datasource: current.datasourceInstance?.getRef(),
+      queries: current.queries,
+      queryResponse: current.queryResponse,
+      panelState: current.panelsState,
     });
   };
 

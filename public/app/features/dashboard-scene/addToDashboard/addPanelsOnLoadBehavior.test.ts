@@ -5,6 +5,7 @@ import { DASHBOARD_FROM_LS_KEY, type DashboardDTO } from 'app/types/dashboard';
 
 import { DashboardScene } from '../scene/DashboardScene';
 import { DefaultGridLayoutManager } from '../scene/layout-default/DefaultGridLayoutManager';
+import { getQueryRunnerFor } from '../utils/utils';
 
 import { addPanelsOnLoadBehavior } from './addPanelsOnLoadBehavior';
 
@@ -99,19 +100,45 @@ describe('addPanelsOnLoadBehavior', () => {
     });
   });
 
-  it('defers panel addition until sidebar activates when it is not yet active', () => {
+  it('activates the sidebar and adds panels immediately when it is not yet active', () => {
     store.setObject(DASHBOARD_FROM_LS_KEY, buildTestDTO());
     const scene = buildTestScene();
     const addPanelSpy = jest.spyOn(scene, 'addPanel');
+    const activateSpy = jest.spyOn(scene, 'activateSidebar');
 
     addPanelsOnLoadBehavior(scene);
 
-    expect(addPanelSpy).not.toHaveBeenCalled();
-
-    scene.state.sidebar.activate();
-
+    expect(activateSpy).toHaveBeenCalled();
     expect(addPanelSpy).toHaveBeenCalledTimes(1);
     expect(addPanelSpy).toHaveBeenCalledWith(expect.any(VizPanel));
+  });
+
+  it('preserves Explore query targets on the added panel', () => {
+    const datasource = { type: 'prometheus', uid: 'prom-1' };
+    store.setObject(
+      DASHBOARD_FROM_LS_KEY,
+      buildTestDTO({
+        panels: [
+          {
+            id: 1,
+            type: 'timeseries',
+            title: 'New Panel',
+            gridPos: { x: 0, y: 0, w: 12, h: 8 },
+            datasource,
+            targets: [{ refId: 'A', expr: 'up', datasource }],
+          },
+        ],
+      })
+    );
+    const scene = buildTestScene();
+    scene.state.sidebar.activate();
+
+    addPanelsOnLoadBehavior(scene);
+
+    const vizPanel = scene.getDashboardPanels()[0];
+    const runner = getQueryRunnerFor(vizPanel);
+    expect(runner?.state.queries).toEqual([{ refId: 'A', expr: 'up', datasource }]);
+    expect(runner?.state.datasource).toEqual(datasource);
   });
 
   describe('time range', () => {

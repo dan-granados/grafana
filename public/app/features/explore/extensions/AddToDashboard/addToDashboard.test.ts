@@ -60,6 +60,52 @@ describe('buildDashboardPanelFromExploreState', () => {
     expect(result.targets).toEqual(queries);
   });
 
+  it('copies query body and attaches pane datasource when queries omit it', () => {
+    const queries: DataQuery[] = [{ refId: 'A', expr: 'up' } as DataQuery];
+    const datasource = { type: 'prometheus', uid: 'prom-1' };
+
+    const result = buildDashboardPanelFromExploreState({
+      queries,
+      queryResponse: createEmptyQueryResponse(),
+      datasource,
+    });
+
+    expect(result.datasource).toEqual(datasource);
+    expect(result.targets).toEqual([{ refId: 'A', expr: 'up', datasource }]);
+  });
+
+  it('keeps per-query datasource when present', () => {
+    const queryDs = { type: 'loki', uid: 'loki-1' };
+    const paneDs = { type: 'prometheus', uid: 'prom-1' };
+    const queries: DataQuery[] = [{ refId: 'A', expr: '{job="a"}', datasource: queryDs } as DataQuery];
+
+    const result = buildDashboardPanelFromExploreState({
+      queries,
+      queryResponse: createEmptyQueryResponse(),
+      datasource: paneDs,
+    });
+
+    expect(result.targets?.[0]).toEqual({ refId: 'A', expr: '{job="a"}', datasource: queryDs });
+  });
+
+  it('prefers the queries that were actually run over editor state', () => {
+    const paneDs = { type: 'prometheus', uid: 'prom-1' };
+    const editorQueries: DataQuery[] = [{ refId: 'A' }];
+    const ranQueries: DataQuery[] = [{ refId: 'A', expr: 'up', datasource: paneDs }];
+    const queryResponse = {
+      ...createEmptyQueryResponse(),
+      request: { targets: ranQueries },
+    };
+
+    const result = buildDashboardPanelFromExploreState({
+      queries: editorQueries,
+      queryResponse: queryResponse as ExplorePanelData,
+      datasource: paneDs,
+    });
+
+    expect(result.targets).toEqual(ranQueries);
+  });
+
   describe('Setting visualization type', () => {
     describe('Defaults to table', () => {
       const cases: Array<[string, DataQuery[], ExplorePanelData]> = [
