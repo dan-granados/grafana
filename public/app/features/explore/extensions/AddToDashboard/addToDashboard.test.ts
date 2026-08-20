@@ -91,7 +91,7 @@ describe('buildDashboardPanelFromExploreState', () => {
   it('prefers the queries that were actually run over editor state', () => {
     const paneDs = { type: 'prometheus', uid: 'prom-1' };
     const editorQueries: DataQuery[] = [{ refId: 'A' }];
-    const ranQueries: DataQuery[] = [{ refId: 'A', expr: 'up', datasource: paneDs }];
+    const ranQueries: DataQuery[] = [{ refId: 'A', expr: 'up', datasource: paneDs } as DataQuery];
     const queryResponse = {
       ...createEmptyQueryResponse(),
       request: { targets: ranQueries },
