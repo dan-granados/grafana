@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { dateTime, guessBrowserTimeZone, makeTimeRange, type TimeRange } from '@grafana/data';
+import { dateTime, guessBrowserTimeZone, makeTimeRange, rangeUtil, type TimeRange } from '@grafana/data';
 import { selectors as e2eSelectors } from '@grafana/e2e-selectors';
 
 import { TimeRangeProvider } from './TimeRangeContext';
@@ -70,6 +70,47 @@ describe('TimePicker', () => {
 
     expect(screen.getByLabelText(/Move time range backwards/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Move time range forwards/i)).toBeInTheDocument();
+  });
+
+  it('updates the button label when the selected relative range changes', () => {
+    const pickerProps = {
+      onChangeTimeZone: () => {},
+      onChange: () => {},
+      onMoveBackward: () => {},
+      onMoveForward: () => {},
+      onZoom: () => {},
+    };
+
+    const fiveMinutes = rangeUtil.convertRawToRange({ from: 'now-5m', to: 'now' });
+    const { rerender } = render(<TimeRangePicker {...pickerProps} value={fiveMinutes} />);
+
+    expect(screen.getByTestId(selectors.openButton)).toHaveTextContent('Last 5 minutes');
+
+    // Same object reference with updated raw range — graphs can already use the new
+    // parsed from/to while a memoized label would stay on the previous display text.
+    fiveMinutes.raw = { from: 'now-1h', to: 'now' };
+    rerender(<TimeRangePicker {...pickerProps} value={fiveMinutes} />);
+
+    expect(screen.getByTestId(selectors.openButton)).toHaveTextContent('Last 1 hour');
+    expect(screen.getByLabelText(/Time range selected: Last 1 hour/i)).toBeInTheDocument();
+  });
+
+  it('shows Last 1 hour after receiving a new relative TimeRange value', () => {
+    const pickerProps = {
+      onChangeTimeZone: () => {},
+      onChange: () => {},
+      onMoveBackward: () => {},
+      onMoveForward: () => {},
+      onZoom: () => {},
+    };
+
+    const { rerender } = render(
+      <TimeRangePicker {...pickerProps} value={rangeUtil.convertRawToRange({ from: 'now-5m', to: 'now' })} />
+    );
+
+    rerender(<TimeRangePicker {...pickerProps} value={rangeUtil.convertRawToRange({ from: 'now-1h', to: 'now' })} />);
+
+    expect(screen.getByTestId(selectors.openButton)).toHaveTextContent('Last 1 hour');
   });
 
   it('switches overlay content visibility when toolbar button is clicked twice', async () => {
