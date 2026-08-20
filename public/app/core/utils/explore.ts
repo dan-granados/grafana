@@ -261,6 +261,8 @@ export async function ensureQueries(
 
 /**
  * A target is non-empty when it has keys (with non-empty values) other than refId, key, context and datasource.
+ * Prometheus/Loki default queries set `range`/`instant` with an empty `expr`; those flags must not
+ * count as a runnable query or Explore auto-runs a no-op and shows a generic "No data" panel.
  * FIXME: While this is reasonable for practical use cases, a query without any propery might still be "non-empty"
  * in its own scope, for instance when there's no user input needed. This might be the case for an hypothetic datasource in
  * which query options are only set in its config and the query object itself, as generated from its query editor it's always "empty"
@@ -270,7 +272,11 @@ export function hasNonEmptyQuery<TQuery extends DataQuery>(queries: TQuery[]): b
   return (
     queries &&
     queries.some((query) => {
-      const entries = Object.entries(query)
+      const record = query as Record<string, unknown>;
+      if ('expr' in record) {
+        return typeof record.expr === 'string' && record.expr.trim() !== '';
+      }
+      const entries = Object.entries(record)
         .filter(([key, _]) => validKeys.indexOf(key) === -1)
         .filter(([_, value]) => value);
       return entries.length > 0;

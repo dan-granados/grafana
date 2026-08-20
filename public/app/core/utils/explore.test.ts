@@ -319,6 +319,14 @@ describe('hasNonEmptyQuery', () => {
   test('should return false if no queries exist', () => {
     expect(hasNonEmptyQuery([])).toBeFalsy();
   });
+
+  test('should return false for a Prometheus default query with empty expr', () => {
+    expect(hasNonEmptyQuery([{ refId: 'A', expr: '', range: true, instant: true }])).toBe(false);
+  });
+
+  test('should return true when PromQL expr is set', () => {
+    expect(hasNonEmptyQuery([{ refId: 'A', expr: 'up', range: true, instant: true }])).toBe(true);
+  });
 });
 
 describe('getTimeRange', () => {

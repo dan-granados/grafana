@@ -197,6 +197,32 @@ describe('Explore', () => {
     await screen.findByTestId(selectors.components.DataSourcePicker.container);
 
     expect(screen.getByTestId('explore-no-data')).toBeInTheDocument();
+    expect(screen.queryByTestId(selectors.pages.Explore.General.noDataTryQueryButton)).not.toBeInTheDocument();
+  });
+
+  it('should suggest a Prometheus starter query when expr is empty', async () => {
+    const setQueries = jest.fn();
+    setup({
+      setQueries,
+      queryResponse: makeEmptyQueryResponse(LoadingState.Done),
+      queries: [{ refId: 'A', expr: '', range: true, instant: true }],
+      datasourceInstance: {
+        meta: {
+          id: 'prometheus',
+          metrics: true,
+          logs: true,
+        },
+        components: {
+          QueryEditorHelp: {},
+        },
+      } as DataSourceApi,
+    });
+
+    expect(await screen.findByTestId(selectors.pages.Explore.General.noDataTryQueryButton)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId(selectors.pages.Explore.General.noDataTryQueryButton));
+
+    expect(setQueries).toHaveBeenCalledWith('left', [expect.objectContaining({ refId: 'A', expr: 'up' })]);
   });
 
   it('should render toolbar extension point if extensions is available', async () => {

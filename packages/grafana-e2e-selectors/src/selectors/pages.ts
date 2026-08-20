@@ -1145,6 +1145,9 @@ export const versionedPages = {
       addQueryRow: {
         '13.2.0': 'data-testid explore add query row button',
       },
+      noDataTryQueryButton: {
+        '13.2.0': 'data-testid explore no data try query button',
+      },
     },
     toolbar: {
       bar: {
