@@ -76,7 +76,7 @@ export function buildDashboardPanelFromExploreState(options: ExploreToDashboardP
   const targets = getTargetsFromExploreQueries(queries, options.datasource);
 
   return {
-    targets,
+    targets: targets as Panel['targets'],
     type: panelType,
     title: t('explore.build-dashboard-panel-from-explore-state.title.new-panel', 'New Panel'),
     gridPos: { x: 0, y: 0, w: 12, h: 8 },
