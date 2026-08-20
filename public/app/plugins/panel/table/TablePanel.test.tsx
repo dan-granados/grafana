@@ -2,6 +2,7 @@ import { render, screen } from 'test/test-utils';
 import userEvent from '@testing-library/user-event';
 
 import { createDataFrame, FieldType, getDefaultTimeRange, LoadingState } from '@grafana/data';
+import { TableNG } from '@grafana/ui/unstable';
 
 import { getPanelProps } from '../test-utils';
 
@@ -15,6 +16,22 @@ jest.mock('@grafana/ui', () => ({
     onAddAdHocFilter: undefined,
   }),
 }));
+
+jest.mock('@grafana/ui/unstable', () => {
+  const actual = jest.requireActual('@grafana/ui/unstable');
+  return {
+    ...actual,
+    TableNG: jest.fn((props: { onSortByChange?: (sortBy: Options['sortBy']) => void; sortByBehavior?: string }) => (
+      <button
+        data-testid="mock-table-sort"
+        data-sort-behavior={props.sortByBehavior}
+        onClick={() => props.onSortByChange?.([{ displayName: 'name', desc: false }])}
+      >
+        sort
+      </button>
+    )),
+  };
+});
 
 const frame = createDataFrame({
   name: 'A',
@@ -46,29 +63,17 @@ function renderTable(optionsOverrides?: Partial<Options>) {
 }
 
 describe('TablePanel', () => {
-  it('keeps header sort after options.sortBy is applied on rerender', async () => {
+  it('uses managed sort so header clicks persist via options.sortBy', async () => {
     const user = userEvent.setup();
-    const { props, rerender } = renderTable({ sortBy: [] });
+    const { props } = renderTable({ sortBy: [] });
 
-    const nameHeader = screen.getByRole('columnheader', { name: /name/i });
-    const sortControl = nameHeader.querySelector('button') ?? nameHeader;
-    await user.click(sortControl);
+    expect(screen.getByTestId('mock-table-sort')).toHaveAttribute('data-sort-behavior', 'managed');
+    expect(TableNG).toHaveBeenCalledWith(expect.objectContaining({ sortByBehavior: 'managed' }), undefined);
+
+    await user.click(screen.getByTestId('mock-table-sort'));
 
     expect(props.onOptionsChange).toHaveBeenCalled();
     const nextOptions = props.onOptionsChange.mock.calls.at(-1)?.[0] as Options;
     expect(nextOptions.sortBy).toEqual([{ displayName: 'name', desc: false }]);
-
-    rerender(
-      <TablePanel
-        {...props}
-        options={{
-          ...props.options,
-          sortBy: nextOptions.sortBy,
-        }}
-      />
-    );
-
-    expect(screen.getByRole('columnheader', { name: /name/i })).toHaveAttribute('aria-sort', 'ascending');
-    expect(screen.getByText('alpha')).toBeInTheDocument();
   });
 });

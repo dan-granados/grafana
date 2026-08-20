@@ -325,9 +325,10 @@ describe('SaveDashboardDrawer', () => {
       const { dashboard, openAndRender } = setup();
       const drawer = openAndRender({ saveAsCopy: true });
 
+      expect(await screen.findByText('Save dashboard copy')).toBeInTheDocument();
       expect(dashboard.state.title).toBe('hello Copy');
 
-      act(() => {
+      await act(async () => {
         drawer.onClose();
       });
 
