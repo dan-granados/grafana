@@ -2,7 +2,7 @@ import { css, cx } from '@emotion/css';
 import { useDialog } from '@react-aria/dialog';
 import { FocusScope } from '@react-aria/focus';
 import { useOverlay } from '@react-aria/overlays';
-import { memo, createRef, useState, useEffect, type JSX } from 'react';
+import { createRef, useState, useEffect, type JSX } from 'react';
 
 import {
   rangeUtil,
@@ -184,7 +184,7 @@ export function TimeRangePicker(props: TimeRangePickerProps) {
           type="button"
           variant={variant}
         >
-          <TimePickerButtonLabel {...props} />
+          <TimePickerButtonLabel hideText={props.hideText} value={value} timeZone={timeZone} quickRanges={quickRanges} />
         </ToolbarButton>
       </Tooltip>
       {isOpen && (
@@ -277,7 +277,7 @@ export const TimePickerTooltip = ({ timeRange, timeZone }: { timeRange: TimeRang
 
 type LabelProps = Pick<TimeRangePickerProps, 'hideText' | 'value' | 'timeZone' | 'quickRanges'>;
 
-export const TimePickerButtonLabel = memo<LabelProps>(({ hideText, value, timeZone, quickRanges }) => {
+export function TimePickerButtonLabel({ hideText, value, timeZone, quickRanges }: LabelProps) {
   const styles = useStyles2(getLabelStyles);
 
   if (hideText) {
@@ -290,7 +290,7 @@ export const TimePickerButtonLabel = memo<LabelProps>(({ hideText, value, timeZo
       <span className={styles.utc}>{rangeUtil.describeTimeRangeAbbreviation(value, timeZone)}</span>
     </span>
   );
-});
+}
 
 TimePickerButtonLabel.displayName = 'TimePickerButtonLabel';
 
