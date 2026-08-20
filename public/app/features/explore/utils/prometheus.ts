@@ -12,6 +12,8 @@ import { matchPluginId } from '@grafana/data';
  * a guarantee, so `prometheus.test.ts` pins it: a caller holding only a type must not
  * silently disagree with one holding meta.
  */
+export const PROMETHEUS_STARTER_EXPR = 'up';
+
 export function isPrometheusType(type: string | undefined | null): boolean {
   return !!type && matchPluginId('prometheus', { id: type });
 }
