@@ -18,6 +18,7 @@ import { updateDashboardUidLastUsedDatasource } from '../../dashboard/utils/dash
 import { type DashboardScene } from '../scene/DashboardScene';
 import { DashboardInteractions } from '../utils/interactions';
 import { trackDashboardSceneCreatedOrSaved } from '../utils/tracking';
+import { stripK8sIdentity } from './saveAsCopyUtils';
 
 export function useSaveDashboard(isCopy = false) {
   const notifyApp = useAppNotification();
@@ -50,7 +51,7 @@ export function useSaveDashboard(isCopy = false) {
           message: options.message,
           overwrite: options.overwrite,
           showErrorAlert: false,
-          k8s: options.k8s,
+          k8s: options.saveAsCopy ? stripK8sIdentity(options.k8s) : options.k8s,
         });
 
         if ('error' in result) {

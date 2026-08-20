@@ -304,10 +304,12 @@ describe('SaveDashboardDrawer', () => {
 
   describe('Save as copy', () => {
     it('Should show save as form', async () => {
-      const { openAndRender } = setup();
+      const { dashboard, openAndRender } = setup();
       openAndRender({ saveAsCopy: true });
 
       expect(await screen.findByText('Save dashboard copy')).toBeInTheDocument();
+      expect(dashboard.state.title).toBe('hello Copy');
+      expect(screen.getByDisplayValue('hello Copy')).toBeInTheDocument();
 
       mockSaveDashboard();
 
@@ -316,6 +318,21 @@ describe('SaveDashboardDrawer', () => {
       const dataSent = saveDashboardMutationMock.mock.calls[0][0];
       expect(dataSent.dashboard.uid).toEqual('');
       expect(dataSent.k8s).toBeUndefined();
+      expect(dataSent.k8s?.name).toBeUndefined();
+    });
+
+    it('restores the original title on cancel', async () => {
+      const { dashboard, openAndRender } = setup();
+      const drawer = openAndRender({ saveAsCopy: true });
+
+      expect(await screen.findByText('Save dashboard copy')).toBeInTheDocument();
+      expect(dashboard.state.title).toBe('hello Copy');
+
+      await act(async () => {
+        drawer.onClose();
+      });
+
+      expect(dashboard.state.title).toBe('hello');
     });
 
     it('restores meta on cancel after a Save As folder change', async () => {

@@ -16,6 +16,7 @@ import { type DashboardMeta } from 'app/types/dashboard';
 
 import { type DashboardScene } from '../scene/DashboardScene';
 
+import { getDashboardCopyTitle } from './saveAsCopyUtils';
 import { type DashboardChangeInfo, NameAlreadyExistsError, SaveButton, isNameExistsError } from './shared';
 import { useSaveDashboard } from './useSaveDashboard';
 
@@ -73,7 +74,7 @@ export function SaveDashboardAsForm({ dashboard, changeInfo, onCancel }: Props) 
   const { register, handleSubmit, setValue, formState, getValues, watch, trigger } = useForm<SaveDashboardAsFormDTO>({
     mode: 'onBlur',
     defaultValues: {
-      title: changeInfo.isNew ? changedSaveModel.title! : `${changedSaveModel.title} Copy`,
+      title: changeInfo.isNew ? (changedSaveModel.title ?? '') : getDashboardCopyTitle(changedSaveModel.title ?? ''),
       description: changedSaveModel.description ?? '',
       folder: {
         uid: dashboard.state.meta.folderUid,
