@@ -97,7 +97,17 @@ export const DashboardPrompt = memo(({ dashboard }: DashboardPromptProps) => {
           },
         });
       },
-
+      onSaveAsCopyClick: contextSrv.hasEditPermissionInFolders
+        ? () => {
+            hideModal();
+            dashboard.openSaveDrawer({
+              saveAsCopy: true,
+              onSaveSuccess: () => {
+                moveToBlockedLocationAfterReactStateUpdate(location);
+              },
+            });
+          }
+        : undefined,
       onDiscard: () => {
         dashboard.exitEditMode({ skipConfirm: true });
         hideModal();
@@ -128,9 +138,15 @@ interface UnsavedChangesModalProps {
   onDiscard: () => void;
   onDismiss: () => void;
   onSaveDashboardClick?: () => void;
+  onSaveAsCopyClick?: () => void;
 }
 
-const UnsavedChangesModal = ({ onDiscard, onDismiss, onSaveDashboardClick }: UnsavedChangesModalProps) => {
+const UnsavedChangesModal = ({
+  onDiscard,
+  onDismiss,
+  onSaveDashboardClick,
+  onSaveAsCopyClick,
+}: UnsavedChangesModalProps) => {
   const styles = useStyles2(getStyles);
 
   return (
@@ -150,6 +166,11 @@ const UnsavedChangesModal = ({ onDiscard, onDismiss, onSaveDashboardClick }: Uns
         <Button variant="destructive" onClick={onDiscard}>
           <Trans i18nKey="dashboard-scene.unsaved-changes-modal.discard">Discard</Trans>
         </Button>
+        {onSaveAsCopyClick && (
+          <Button variant="secondary" onClick={onSaveAsCopyClick}>
+            <Trans i18nKey="dashboard-scene.unsaved-changes-modal.save-as-copy">Save as copy</Trans>
+          </Button>
+        )}
         <Button onClick={onSaveDashboardClick}>
           <Trans i18nKey="dashboard-scene.unsaved-changes-modal.save-dashboard">Save dashboard</Trans>
         </Button>

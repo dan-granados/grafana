@@ -33,6 +33,7 @@ import {
   withTheme2,
 } from '@grafana/ui';
 import { FILTER_FOR_OPERATOR, FILTER_OUT_OPERATOR } from '@grafana/ui/internal';
+import { hasNonEmptyQuery } from 'app/core/utils/explore';
 import { MIXED_DATASOURCE_NAME } from 'app/plugins/datasource/mixed/MixedDataSource';
 import { type StoreState } from 'app/types/store';
 
@@ -71,7 +72,7 @@ import {
 } from './state/query';
 import { isSplit, selectExploreDSMaps } from './state/selectors';
 import { updateTimeRange } from './state/time';
-import { isPrometheusType } from './utils/prometheus';
+import { isPrometheusType, PROMETHEUS_STARTER_EXPR } from './utils/prometheus';
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
@@ -362,6 +363,27 @@ export class Explore extends PureComponent<Props, ExploreState> {
   }
 
   renderNoData() {
+    const { queries, datasourceInstance, setQueries, exploreId } = this.props;
+    const isPrometheusSelected = datasourceInstance?.meta.mixed
+      ? queries.some((q) => isPrometheusType(q.datasource?.type))
+      : !!datasourceInstance && matchPluginId('prometheus', datasourceInstance.meta);
+
+    if (isPrometheusSelected && !hasNonEmptyQuery(queries)) {
+      return (
+        <NoData
+          hint={t(
+            'explore.no-data.prometheus-hint',
+            'Enter a PromQL query, or try a starter metric to see data from this Prometheus source.'
+          )}
+          actionLabel={t('explore.no-data.try-up', 'Try {{query}}', { query: PROMETHEUS_STARTER_EXPR })}
+          onAction={() => {
+            const current = queries[0];
+            setQueries(exploreId, [{ ...(current ?? { refId: 'A' }), expr: PROMETHEUS_STARTER_EXPR }]);
+          }}
+        />
+      );
+    }
+
     return <NoData />;
   }
 
@@ -609,6 +631,7 @@ export class Explore extends PureComponent<Props, ExploreState> {
       ? this.props.queries.some((q) => isPrometheusType(q.datasource?.type))
       : !!datasourceInstance && matchPluginId('prometheus', datasourceInstance.meta);
     const showPanels = queryResponse && queryResponse.state !== LoadingState.NotStarted;
+    const showStarterHint = isPrometheusSelected && !hasNonEmptyQuery(this.props.queries);
     const showNoData =
       queryResponse.state === LoadingState.Done &&
       [
@@ -815,6 +838,11 @@ export class Explore extends PureComponent<Props, ExploreState> {
                                     </ErrorBoundaryAlert>
                                   )}
                                 </>
+                              )}
+                              {!showPanels && showStarterHint && (
+                                <ErrorBoundaryAlert boundaryName="explore-no-data">
+                                  {this.renderNoData()}
+                                </ErrorBoundaryAlert>
                               )}
                             </ErrorBoundaryAlert>
                           </main>

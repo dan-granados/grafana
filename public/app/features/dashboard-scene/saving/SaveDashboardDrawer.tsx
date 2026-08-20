@@ -29,6 +29,7 @@ interface SaveDashboardDrawerState extends SceneObjectState {
   saveDashboardTemplate?: boolean;
   showVariablesWarning?: boolean;
   onSaveSuccess?: () => void;
+  titleBeforeSaveAs?: string;
 }
 
 export class SaveDashboardDrawer extends SceneObjectBase<SaveDashboardDrawerState> {
@@ -39,6 +40,7 @@ export class SaveDashboardDrawer extends SceneObjectBase<SaveDashboardDrawerStat
     const shouldRestoreMeta = changeInfo.isNew || Boolean(this.state.saveAsCopy);
     dashboard.setState({
       overlay: undefined,
+      title: this.state.titleBeforeSaveAs ?? dashboard.state.title,
       meta: shouldRestoreMeta ? (dashboard.getInitialState()?.meta ?? dashboard.state.meta) : dashboard.state.meta,
     });
   };

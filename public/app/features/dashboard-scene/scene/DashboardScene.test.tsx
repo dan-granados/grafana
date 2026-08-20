@@ -2007,6 +2007,18 @@ describe('DashboardScene', () => {
       expect((overlay as SaveDashboardDrawer).state.saveAsDashboardTemplate).toBeUndefined();
     });
 
+    it('renames an existing dashboard to Copy when opening save as copy', () => {
+      const scene = buildTestScene();
+      scene.onEnterEditMode();
+
+      scene.openSaveDrawer({ saveAsCopy: true });
+
+      const overlay = scene.state.overlay as SaveDashboardDrawer;
+      expect(scene.state.title).toBe('hello Copy');
+      expect(overlay.state.saveAsCopy).toBe(true);
+      expect(overlay.state.titleBeforeSaveAs).toBe('hello');
+    });
+
     it('does nothing when the scene is not in edit mode', () => {
       const scene = buildTestScene();
       // Not entering edit mode

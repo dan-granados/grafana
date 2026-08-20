@@ -65,6 +65,7 @@ import {
 } from '../../apiserver/types';
 import { DashboardSceneChangeTracker } from '../saving/DashboardSceneChangeTracker';
 import { SaveDashboardDrawer } from '../saving/SaveDashboardDrawer';
+import { getDashboardCopyTitle } from '../saving/saveAsCopyUtils';
 import { type DashboardChangeInfo } from '../saving/shared';
 import {
   type DashboardSceneSerializerLike,
@@ -742,7 +743,11 @@ export class DashboardScene extends SceneObjectBase<DashboardSceneState> impleme
       return;
     }
 
+    const originalTitle = this.state.title;
+    const copyTitle = saveAsCopy && this.state.uid ? getDashboardCopyTitle(originalTitle) : originalTitle;
+
     this.setState({
+      ...(copyTitle !== originalTitle ? { title: copyTitle } : {}),
       overlay: new SaveDashboardDrawer({
         dashboardRef: this.getRef(),
         saveAsCopy,
@@ -750,6 +755,7 @@ export class DashboardScene extends SceneObjectBase<DashboardSceneState> impleme
         saveDashboardTemplate,
         onSaveSuccess,
         showVariablesWarning: this.hasVariableErrors(),
+        titleBeforeSaveAs: copyTitle !== originalTitle ? originalTitle : undefined,
       }),
     });
   }
