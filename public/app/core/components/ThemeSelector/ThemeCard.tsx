@@ -24,7 +24,7 @@ export function ThemeCard({ themeOption, isExperimental, isSelected, onSelect }:
     <div className={styles.card} onClick={onSelect}>
       <div className={styles.header}>
         <RadioButtonDot
-          id={`theme-${theme.name}`}
+          id={`theme-${themeOption.id}`}
           name={'theme'}
           label={label}
           onClick={(event) => {
