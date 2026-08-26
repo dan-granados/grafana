@@ -1,4 +1,5 @@
 import { css } from '@emotion/css';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { FeatureState, type GrafanaTheme2, type ThemeRegistryItem } from '@grafana/data';
 import { t } from '@grafana/i18n';
@@ -14,7 +15,6 @@ interface ThemeCardProps {
 }
 
 export function ThemeCard({ themeOption, isExperimental, isSelected, onSelect }: ThemeCardProps) {
-  const theme = themeOption.build();
   const label = getTranslatedThemeName(themeOption);
   const styles = useStyles2(getStyles);
 
@@ -36,10 +36,49 @@ export function ThemeCard({ themeOption, isExperimental, isSelected, onSelect }:
         />
         {isExperimental && <FeatureBadge featureState={FeatureState.experimental} />}
       </div>
-      <ThemePreview theme={theme} />
+      <LazyThemePreview themeOption={themeOption} />
     </div>
   );
 }
+
+function LazyThemePreview({ themeOption }: { themeOption: ThemeRegistryItem }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const theme = useMemo(() => (isVisible ? themeOption.build() : undefined), [isVisible, themeOption]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || isVisible || !window.IntersectionObserver) {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '250px 0px' }
+    );
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  return (
+    <div ref={containerRef} className={previewStyles}>
+      {theme && <ThemePreview theme={theme} />}
+    </div>
+  );
+}
+
+const previewStyles = css({
+  display: 'flex',
+  flexGrow: 1,
+  minHeight: 0,
+});
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
