@@ -74,7 +74,9 @@ public/css/*.min.css
 .vscode/
 !.vscode/launch.json
 .vs/
-.cursor/
+!.cursor/
+!.cursor/environment.json
+!.cursor/Dockerfile
 .devcontainer/
 .claude/*
 
