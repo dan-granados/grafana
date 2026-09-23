@@ -1,6 +1,6 @@
 # Routing
 
-Pull requests that change `examples/code-review/` use [`APPROVAL_POLICY.md`](../../APPROVAL_POLICY.md) at the repository root.
+Pull requests that change `pkg/services/dashboardsearch/` use [`APPROVAL_POLICY.md`](../../APPROVAL_POLICY.md) at the repository root.
 
 - Docs-only pull requests: auto-approve.
 - Auth, SQL, or secret changes: never auto-approve.
