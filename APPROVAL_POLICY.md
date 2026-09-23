@@ -12,7 +12,7 @@ Never auto-approve a pull request that changes any of the following:
 - SQL query construction
 - secrets, credentials, tokens, or API keys
 
-Treat `examples/cursor-automations-demo/` as in scope when the diff adds query construction or credentials.
+Treat `examples/code-review/` as in scope when the diff adds query construction or credentials.
 
 ## Human review
 
