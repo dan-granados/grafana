@@ -1,4 +1,4 @@
-package codereview
+package dashboardsearch
 
 // ReviewConfig holds API settings for the test code review.
 var ReviewConfig = struct {
