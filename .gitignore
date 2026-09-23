@@ -74,7 +74,14 @@ public/css/*.min.css
 .vscode/
 !.vscode/launch.json
 .vs/
-.cursor/
+# Ignore local Cursor state, but keep the demo approval rules tracked.
+# Re-including a path under an ignored directory requires un-ignoring each
+# parent dir first (git will not descend into an excluded dir).
+.cursor/*
+!.cursor/BUGBOT.md
+!.cursor/approval-policies/
+.cursor/approval-policies/*
+!.cursor/approval-policies/ROUTING.md
 .devcontainer/
 .claude/*
 
